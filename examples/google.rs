@@ -56,7 +56,7 @@ fn main() {
         IssuerUrl::new("https://accounts.google.com".to_string()).expect("Invalid issuer URL");
 
     // Fetch Google's OpenID Connect discovery document.
-    let provider_metadata = CoreProviderMetadata::discover(&issuer_url, http_client)
+    let provider_metadata = CoreProviderMetadata::discover(&issuer_url, http_client, Default::default())
         .unwrap_or_else(|err| {
             handle_error(&err, "Failed to discover OpenID Provider");
             unreachable!();
