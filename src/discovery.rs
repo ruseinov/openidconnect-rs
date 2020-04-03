@@ -25,6 +25,20 @@ use super::types::{
 };
 use super::{HttpRequest, HttpResponse, UserInfoUrl, CONFIG_URL_SUFFIX};
 
+pub struct DiscoveryOptions {
+    pub suffix: String,
+    pub check_issuer: bool,
+}
+
+impl Default for DiscoveryOptions {
+    fn default() -> Self {
+        DiscoveryOptions {
+            suffix: String::from(CONFIG_URL_SUFFIX),
+            check_issuer: true,
+        }
+    }
+}
+
 ///
 /// Trait for adding extra fields to [`ProviderMetadata`].
 ///
@@ -317,18 +331,19 @@ where
     pub fn discover<HC, RE>(
         issuer_url: &IssuerUrl,
         http_client: HC,
+        options: DiscoveryOptions,
     ) -> Result<Self, DiscoveryError<RE>>
     where
         HC: Fn(HttpRequest) -> Result<HttpResponse, RE>,
         RE: Fail,
     {
         let discovery_url = issuer_url
-            .join(CONFIG_URL_SUFFIX)
+            .join(options.suffix.as_str())
             .map_err(DiscoveryError::UrlParse)?;
 
         http_client(Self::discovery_request(discovery_url))
             .map_err(DiscoveryError::Request)
-            .and_then(|http_response| Self::discovery_response(issuer_url, http_response))
+            .and_then(|http_response| Self::discovery_response(issuer_url, http_response, options))
             .and_then(|provider_metadata| {
                 JsonWebKeySet::fetch(provider_metadata.jwks_uri(), http_client).map(|jwks| Self {
                     jwks,
@@ -345,6 +360,7 @@ where
     pub fn discover_future<F, HC, RE>(
         issuer_url: IssuerUrl,
         http_client: HC,
+        options: DiscoveryOptions
     ) -> impl Future<Item = Self, Error = DiscoveryError<RE>>
     where
         F: Future<Item = HttpResponse, Error = RE>,
@@ -352,7 +368,7 @@ where
         RE: Fail,
     {
         issuer_url
-            .join(CONFIG_URL_SUFFIX)
+            .join(options.suffix.as_str())
             .map_err(DiscoveryError::UrlParse)
             .into_future()
             .and_then(move |discovery_url| {
@@ -361,7 +377,7 @@ where
                     .map(|http_response| (http_response, http_client))
             })
             .and_then(move |(http_response, http_client)| {
-                Self::discovery_response(&issuer_url, http_response)
+                Self::discovery_response(&issuer_url, http_response, options)
                     .into_future()
                     .map(|provider_metadata| (provider_metadata, http_client))
             })
@@ -383,20 +399,24 @@ where
     pub async fn discover_async<F, HC, RE>(
         issuer_url: IssuerUrl,
         http_client: HC,
+        options: DiscoveryOptions
     ) -> Result<Self, DiscoveryError<RE>>
     where
         F: futures_0_3::Future<Output = Result<HttpResponse, RE>>,
         HC: Fn(HttpRequest) -> F + 'static,
         RE: Fail,
     {
+
         let discovery_url = issuer_url
-            .join(CONFIG_URL_SUFFIX)
+            .join(options.suffix.as_str())
             .map_err(DiscoveryError::UrlParse)?;
 
         let provider_metadata = http_client(Self::discovery_request(discovery_url))
             .await
             .map_err(DiscoveryError::Request)
-            .and_then(|http_response| Self::discovery_response(&issuer_url, http_response))?;
+            .and_then(|http_response| Self::discovery_response(&issuer_url,
+                                                               http_response,
+                                                               options))?;
 
         JsonWebKeySet::fetch_async(provider_metadata.jwks_uri(), http_client)
             .await
@@ -420,6 +440,7 @@ where
     fn discovery_response<RE>(
         issuer_url: &IssuerUrl,
         discovery_response: HttpResponse,
+        options: DiscoveryOptions,
     ) -> Result<Self, DiscoveryError<RE>>
     where
         RE: Fail,
@@ -443,7 +464,7 @@ where
         let provider_metadata = serde_json::from_slice::<Self>(&discovery_response.body)
             .map_err(DiscoveryError::Parse)?;
 
-        if provider_metadata.issuer() != issuer_url {
+        if options.check_issuer && provider_metadata.issuer() != issuer_url {
             Err(DiscoveryError::Validation(format!(
                 "unexpected issuer URI `{}` (expected `{}`)",
                 provider_metadata.issuer().url(),

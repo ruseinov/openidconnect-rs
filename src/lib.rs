@@ -644,6 +644,7 @@ pub use claims::{
 };
 pub use discovery::{
     AdditionalProviderMetadata, DiscoveryError, EmptyAdditionalProviderMetadata, ProviderMetadata,
+    DiscoveryOptions,
 };
 pub use id_token::IdTokenFields;
 pub use id_token::{IdToken, IdTokenClaims};

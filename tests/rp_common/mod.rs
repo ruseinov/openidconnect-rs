@@ -132,7 +132,7 @@ pub fn issuer_url(test_id: &str) -> IssuerUrl {
 
 pub fn get_provider_metadata(test_id: &str) -> CoreProviderMetadata {
     let _issuer_url = issuer_url(test_id);
-    CoreProviderMetadata::discover(&_issuer_url, http_client).expect(&format!(
+    CoreProviderMetadata::discover(&_issuer_url, http_client, Default::default()).expect(&format!(
         "Failed to fetch provider metadata from {:?}",
         _issuer_url
     ))
